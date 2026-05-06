@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>EPUB Reader</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="/static/js/main.js"></script>
+</head>
+<body>
+    <div class="left-edge-trigger" id="left-edge"></div>
+    
+    <div id="sidebar" class="open">
+        <button id="sidebar-toggle">&lt;&lt;&lt;</button>
+        <div class="sidebar-content">
+            <input type="file" id="file-input" accept=".epub" style="display: none;">
+            <button id="upload-btn" onclick="document.getElementById('file-input').click()">打开本地电子书</button>
+            
+            <h2>阅读历史</h2>
+            <ul id="history-list"></ul>
+            
+            <h2>目录</h2>
+            <ul id="toc-list"></ul>
+            
+            <h2>设置</h2>
+            <div>
+                <label><input type="checkbox" id="theme-toggle"> 夜间模式</label>
+            </div>
+            <div>
+                <label><input type="checkbox" id="jp-toggle" checked> 显示日文原文</label>
+            </div>
+            <div>
+                <label>字体大小</label>
+                <input type="range" id="font-size" min="12" max="36" value="18">
+            </div>
+        </div>
+    </div>
+    
+    <div id="content-container">
+        <div id="reader-content"></div>
+    </div>
+</body>
+</html>

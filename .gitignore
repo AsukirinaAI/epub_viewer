@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+books/
+history.json
+reader_settings.json
+design.md
+test.py
