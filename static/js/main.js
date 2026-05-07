@@ -29,21 +29,28 @@ $(document).ready(function() {
         saveSettings();
     });
 
-    // 侧边栏隐藏/显示逻辑
-    $('#sidebar-toggle').click(function() {
-        $('#sidebar').removeClass('open');
-    });
+    // 侧边栏靠近左侧自动唤出，离开后自动隐藏
+    let sidebarHideTimer = null;
 
-    // 鼠标滑到左边界时展开侧边栏
-    $('#left-edge').mouseenter(function() {
+    function showSidebar() {
+        clearTimeout(sidebarHideTimer);
         $('#sidebar').addClass('open');
-    });
-    
-    // If you click outside the sidebar, you may want it to close? Not strictly requested, but good UI.
-    $('#content-container').click(function() {
-        if ($('#sidebar').hasClass('open')) {
-            $('#sidebar').removeClass('open');
-        }
+    }
+
+    function scheduleSidebarHide() {
+        clearTimeout(sidebarHideTimer);
+        sidebarHideTimer = setTimeout(() => {
+            if (!$('#sidebar:hover').length && !$('#left-edge:hover').length) {
+                $('#sidebar').removeClass('open');
+            }
+        }, 120);
+    }
+
+    $('#left-edge').on('mouseenter', showSidebar);
+    $('#left-edge').on('mouseleave', scheduleSidebarHide);
+    $('#sidebar').on('mouseenter', showSidebar);
+    $('#sidebar').on('mouseleave', function() {
+        $('#sidebar').removeClass('open');
     });
 
     $('#file-input').change(function() {

@@ -56,32 +56,11 @@ body {
     gap: 15px;
 }
 
-#sidebar-toggle {
-    position: absolute;
-    right: -35px;
-    top: 10px;
-    width: 35px;
-    height: 40px;
-    background-color: var(--sidebar-bg);
-    border: 1px solid #ddd;
-    border-left: none;
-    border-radius: 0 5px 5px 0;
-    cursor: pointer;
-    font-weight: bold;
-    color: var(--text-color);
-    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-}
-
-[data-theme="dark"] #sidebar-toggle {
-    border-color: #444;
-    box-shadow: 2px 0 5px rgba(0,0,0,0.5);
-}
-
 .left-edge-trigger {
     position: fixed;
     left: 0;
     top: 0;
-    width: 15px;
+    width: 24px;
     height: 100vh;
     z-index: 999;
 }
