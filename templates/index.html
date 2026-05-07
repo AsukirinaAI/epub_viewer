@@ -14,7 +14,11 @@
         <div class="sidebar-content">
             <input type="file" id="file-input" accept=".epub" style="display: none;">
             <button id="upload-btn" onclick="document.getElementById('file-input').click()">打开本地电子书</button>
-            
+            <div class="current-book-control">
+                <div class="current-book-label">当前书籍</div>
+                <div id="current-book-name">未打开书籍</div>
+            </div>
+
             <h2>阅读历史</h2>
             <ul id="history-list"></ul>
             

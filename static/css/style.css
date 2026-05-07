@@ -101,6 +101,23 @@ body {
     border-radius: 4px;
 }
 
+.current-book-control {
+    padding: 8px;
+    background-color: rgba(0, 102, 204, 0.08);
+    border-radius: 6px;
+}
+
+.current-book-label {
+    margin-bottom: 4px;
+    color: #777;
+    font-size: 0.85em;
+}
+
+#current-book-name {
+    word-break: break-all;
+    line-height: 1.35;
+}
+
 .setting-control {
     display: flex;
     flex-direction: column;
@@ -170,6 +187,14 @@ body {
 }
 
 [data-theme="dark"] #toc-source-hint {
+    color: #aaa;
+}
+
+[data-theme="dark"] .current-book-control {
+    background-color: rgba(77, 166, 255, 0.12);
+}
+
+[data-theme="dark"] .current-book-label {
     color: #aaa;
 }
 

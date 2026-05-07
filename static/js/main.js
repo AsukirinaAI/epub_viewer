@@ -5,6 +5,8 @@ let isFetching = false;
 let historyData = {};
 let currentBookInfo = null;
 let currentTocItems = [];
+let loadSessionId = 0;
+let isRestoringPosition = false;
 
 $(document).ready(function() {
     loadSettings();
@@ -82,16 +84,18 @@ $(document).ready(function() {
 
     $('#content-container').on('scroll', function() {
         let container = $(this);
-        if (container[0].scrollHeight - container.scrollTop() - container.innerHeight() < 500) {
+        if (!isRestoringPosition && container[0].scrollHeight - container.scrollTop() - container.innerHeight() < 500) {
             if (!isFetching && currentSpineIndex + 1 < spineList.length) {
                 loadNextChapter();
             }
         }
         
         if (currentBook) {
-            let position = container.scrollTop();
-            updateHistoryActive(currentBook, position, currentSpineIndex);
-            updateTOCActiveState(position);
+            if (!isRestoringPosition) {
+                let progress = getCurrentProgress();
+                updateHistoryActive(currentBook, progress.position, progress.spineIndex);
+            }
+            updateTOCActiveState(container.scrollTop());
         }
     });
 
@@ -102,7 +106,7 @@ $(document).ready(function() {
     $(document).on('click', '.toc-item', function() {
         let index = $(this).data('index');
         if (index >= 0) {
-            openBook(currentBook, index, 0);
+            openBook(currentBook, index, 0, true);
         }
     });
 });
@@ -216,31 +220,66 @@ function saveHistoryMap(map) {
 }
 
 let saveHistoryTimeout = null;
-function updateHistoryActive(book, position, spineIndex) {
+function getChapterTop(chapter) {
+    return chapter[0].offsetTop - $('#reader-content')[0].offsetTop;
+}
+
+function getCurrentProgress() {
+    let scrollTop = $('#content-container').scrollTop();
+    let activeChapter = null;
+
+    $('.chapter-container').each(function() {
+        let chapter = $(this);
+        if (getChapterTop(chapter) <= scrollTop + 100) {
+            activeChapter = chapter;
+        }
+    });
+
+    if (!activeChapter) {
+        activeChapter = $('.chapter-container').first();
+    }
+
+    if (!activeChapter.length) {
+        return { spineIndex: currentSpineIndex, position: scrollTop };
+    }
+
+    let spineIndex = activeChapter.data('spine-index');
+    let position = Math.max(0, scrollTop - getChapterTop(activeChapter));
+    return { spineIndex: spineIndex, position: position };
+}
+
+function saveHistoryNow(book, position) {
+    $.ajax({
+        url: '/api/history',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ book: book, position: position })
+    });
+}
+
+function updateHistoryActive(book, position, spineIndex, immediate = false) {
     if (!historyData[book]) historyData[book] = {};
     historyData[book].position = position;
     historyData[book].spineIndex = spineIndex;
     historyData[book].timestamp = Date.now();
-    
-    // Rerender occasionally to keep order up to date? Probably not while scrolling.
-    
+
     clearTimeout(saveHistoryTimeout);
+    if (immediate) {
+        saveHistoryNow(book, historyData[book]);
+        return;
+    }
+
     saveHistoryTimeout = setTimeout(() => {
-        $.ajax({
-            url: '/api/history',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({ book: book, position: historyData[book] })
-        });
+        saveHistoryNow(book, historyData[book]);
     }, 1000);
 }
 
 function updateTOCActiveState(scrollTop) {
-    // Very simple approximation: chapter containers exist in DOM. We find the last one we've scrolled past.
     let currentIdx = currentSpineIndex;
     $('.chapter-container').each(function() {
-        if ($(this).position().top <= scrollTop + 100) {
-            currentIdx = $(this).data('spine-index');
+        let chapter = $(this);
+        if (getChapterTop(chapter) <= scrollTop + 100) {
+            currentIdx = chapter.data('spine-index');
         }
     });
     $('.toc-item').removeClass('current-toc');
@@ -252,14 +291,20 @@ function updateTOCActiveState(scrollTop) {
     }
 }
 
-function openBook(filename, startSpine = 0, startPos = 0) {
+function openBook(filename, startSpine = 0, startPos = 0, saveImmediately = false) {
+    let isSameBook = currentBook === filename;
+    let sessionId = ++loadSessionId;
+    isFetching = false;
+    isRestoringPosition = true;
     currentBook = filename;
     currentBookInfo = null;
     currentTocItems = [];
+    $('#current-book-name').text(filename);
     $('#reader-content').empty();
     $('#toc-list').empty();
     $('#toc-source-hint').text('');
-    currentSpineIndex = startSpine;
+    $('#content-container').scrollTop(0);
+    currentSpineIndex = Math.max(0, startSpine - 1);
 
     // Update timestamp when opened
     if (!historyData[filename]) historyData[filename] = {};
@@ -267,43 +312,96 @@ function openBook(filename, startSpine = 0, startPos = 0) {
     renderHistory();
 
     $.get(`/api/book/${filename}`, function(info) {
+        if (sessionId !== loadSessionId) return;
         currentBookInfo = info;
         spineList = info.spine;
-        $('#toc-source').val('recommended');
+        if (!isSameBook) {
+            $('#toc-source').val('recommended');
+        }
         renderTOC();
-        loadChapter(currentSpineIndex, startPos);
+        startSpine = Math.max(0, Math.min(parseInt(startSpine) || 0, spineList.length - 1));
+        startPos = Math.max(0, parseFloat(startPos) || 0);
+        currentSpineIndex = Math.max(0, startSpine - 1);
+        loadInitialChapters(startSpine, startPos, sessionId, saveImmediately);
     });
 }
 
-function loadChapter(index, startPos = 0) {
-    if (index >= spineList.length || index < 0 || isFetching) return;
+function finishPositionRestore(sessionId, saveImmediately, startSpine, startPos) {
+    if (sessionId !== loadSessionId) return;
+
+    let targetChapter = $(`.chapter-container[data-spine-index="${startSpine}"]`).first();
+    if (targetChapter.length) {
+        $('#content-container').scrollTop(getChapterTop(targetChapter) + startPos);
+    }
+
+    updateTOCActiveState($('#content-container').scrollTop());
+    isRestoringPosition = false;
+
+    if (saveImmediately) {
+        updateHistoryActive(currentBook, startPos, startSpine, true);
+    }
+
+    if ($('#content-container')[0].scrollHeight <= $('#content-container').innerHeight() + 200) {
+        if (currentSpineIndex + 1 < spineList.length) {
+            loadNextChapter(sessionId);
+        }
+    }
+}
+
+function loadInitialChapters(startSpine, startPos, sessionId, saveImmediately) {
+    let firstIndex = Math.max(0, startSpine - 1);
+    loadChapterRange(firstIndex, startSpine, sessionId, function() {
+        finishPositionRestore(sessionId, saveImmediately, startSpine, startPos);
+    });
+}
+
+function loadChapterRange(index, endIndex, sessionId, done) {
+    if (sessionId !== loadSessionId) return;
+    if (index > endIndex) {
+        done();
+        return;
+    }
+
+    loadChapter(index, sessionId, function() {
+        loadChapterRange(index + 1, endIndex, sessionId, done);
+    });
+}
+
+function loadChapter(index, sessionId = loadSessionId, done = null) {
+    if (sessionId !== loadSessionId || index >= spineList.length || index < 0 || isFetching) return;
     isFetching = true;
-    
+
     let path = spineList[index];
     $.get(`/api/book/${currentBook}/file/${path}`)
     .done(function(content) {
+        if (sessionId !== loadSessionId) return;
+
         let div = $(`<div class="chapter-container" data-spine-index="${index}"></div>`).html(content);
         $('#reader-content').append(div);
-        
-        if (startPos > 0 && index === currentSpineIndex) {
-            $('#content-container').scrollTop(startPos);
-        }
-        
+        currentSpineIndex = Math.max(currentSpineIndex, index);
         updateTOCActiveState($('#content-container').scrollTop());
         isFetching = false;
-        
+
+        if (done) {
+            done();
+            return;
+        }
+
         if ($('#content-container')[0].scrollHeight <= $('#content-container').innerHeight() + 200) {
             if (index + 1 < spineList.length) {
-                loadNextChapter();
+                loadNextChapter(sessionId);
             }
         }
     })
     .fail(function() {
-        isFetching = false;
+        if (sessionId === loadSessionId) {
+            isFetching = false;
+            if (done) done();
+        }
     });
 }
 
-function loadNextChapter() {
-    currentSpineIndex++;
-    loadChapter(currentSpineIndex, 0);
+function loadNextChapter(sessionId = loadSessionId) {
+    if (sessionId !== loadSessionId) return;
+    loadChapter(currentSpineIndex + 1, sessionId);
 }
