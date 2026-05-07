@@ -19,8 +19,18 @@
             <ul id="history-list"></ul>
             
             <h2>目录</h2>
+            <div class="toc-source-control">
+                <label for="toc-source">目录来源</label>
+                <select id="toc-source">
+                    <option value="recommended">智能推荐</option>
+                    <option value="original">EPUB原目录</option>
+                    <option value="generated">智能目录</option>
+                    <option value="spine">全部spine</option>
+                </select>
+                <div id="toc-source-hint"></div>
+            </div>
             <ul id="toc-list"></ul>
-            
+
             <h2>设置</h2>
             <div>
                 <label><input type="checkbox" id="theme-toggle"> 夜间模式</label>

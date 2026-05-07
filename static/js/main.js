@@ -3,6 +3,8 @@ let currentSpineIndex = 0;
 let spineList = [];
 let isFetching = false;
 let historyData = {};
+let currentBookInfo = null;
+let currentTocItems = [];
 
 $(document).ready(function() {
     loadSettings();
@@ -93,9 +95,15 @@ $(document).ready(function() {
         }
     });
 
+    $('#toc-source').change(function() {
+        renderTOC();
+    });
+
     $(document).on('click', '.toc-item', function() {
         let index = $(this).data('index');
-        openBook(currentBook, index, 0);
+        if (index >= 0) {
+            openBook(currentBook, index, 0);
+        }
     });
 });
 
@@ -141,7 +149,7 @@ function renderHistory() {
     let books = Object.keys(historyData).map(k => {
         return { name: k, data: historyData[k] };
     });
-    
+
     books.sort((a, b) => (b.data.timestamp || 0) - (a.data.timestamp || 0));
     // Max 5 items
     books = books.slice(0, 5);
@@ -151,6 +159,52 @@ function renderHistory() {
         let idx = b.data.spineIndex || 0;
         $('#history-list').append(`<li class="history-item" onclick="openBook('${b.name}', ${idx}, ${p})">${b.name}</li>`);
     });
+}
+
+function getSelectedTOCItems() {
+    if (!currentBookInfo) return [];
+    let source = $('#toc-source').val();
+    if (source === 'recommended') {
+        source = currentBookInfo.toc_recommendation || 'original';
+    }
+    if (source === 'generated') {
+        return currentBookInfo.generated_toc || [];
+    }
+    if (source === 'spine') {
+        return currentBookInfo.spine_toc || [];
+    }
+    return currentBookInfo.original_toc || currentBookInfo.toc || [];
+}
+
+function renderTOC() {
+    $('#toc-list').empty();
+    currentTocItems = getSelectedTOCItems().filter(item => item.spineIndex >= 0);
+
+    if (!currentBookInfo) {
+        $('#toc-source-hint').text('');
+        return;
+    }
+
+    let source = $('#toc-source').val();
+    let quality = currentBookInfo.toc_quality || {};
+    let hint = source === 'recommended' ? quality.reason : '';
+    $('#toc-source-hint').text(hint);
+
+    if (!currentTocItems.length) {
+        $('#toc-list').append('<li class="toc-empty">暂无可跳转目录</li>');
+        return;
+    }
+
+    currentTocItems.forEach(item => {
+        let level = Math.max(1, Math.min(parseInt(item.level || 1), 4));
+        $('<li></li>')
+            .addClass(`toc-item toc-level-${level}`)
+            .attr('data-index', item.spineIndex)
+            .text(item.title)
+            .appendTo('#toc-list');
+    });
+
+    updateTOCActiveState($('#content-container').scrollTop());
 }
 
 // Full save helper
@@ -190,30 +244,33 @@ function updateTOCActiveState(scrollTop) {
         }
     });
     $('.toc-item').removeClass('current-toc');
-    $(`.toc-item[data-index="${currentIdx}"]`).addClass('current-toc');
+    let activeItem = $('.toc-item').filter(function() {
+        return $(this).data('index') <= currentIdx;
+    }).last();
+    if (activeItem.length) {
+        activeItem.addClass('current-toc');
+    }
 }
 
 function openBook(filename, startSpine = 0, startPos = 0) {
     currentBook = filename;
+    currentBookInfo = null;
+    currentTocItems = [];
     $('#reader-content').empty();
+    $('#toc-list').empty();
+    $('#toc-source-hint').text('');
     currentSpineIndex = startSpine;
-    
+
     // Update timestamp when opened
     if (!historyData[filename]) historyData[filename] = {};
     historyData[filename].timestamp = Date.now();
     renderHistory();
-    
+
     $.get(`/api/book/${filename}`, function(info) {
+        currentBookInfo = info;
         spineList = info.spine;
-        
-        $('#toc-list').empty();
-        info.toc.forEach(item => {
-            let sIndex = spineList.indexOf(item.src);
-            if (sIndex !== -1) {
-                $('#toc-list').append(`<li class="toc-item" data-index="${sIndex}">${item.title}</li>`);
-            }
-        });
-        
+        $('#toc-source').val('recommended');
+        renderTOC();
         loadChapter(currentSpineIndex, startPos);
     });
 }
