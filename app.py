@@ -322,13 +322,12 @@ def get_book_file(filename, filepath):
                         else:
                             img['xlink:href'] = f"/api/book/{filename}/file/{abs_src}"
                             
-                for css in soup.find_all('link', rel='stylesheet'):
-                    href = css.get('href')
-                    if href:
-                        abs_href = os.path.normpath(os.path.join(os.path.dirname(filepath), href)).replace('\\', '/')
-                        css['href'] = f"/api/book/{filename}/file/{abs_href}"
-                        
-                content = str(soup).encode('utf-8')
+                for tag in soup.find_all(['link', 'style']):
+                    tag.decompose()
+
+                body = soup.find('body')
+                content_html = ''.join(str(child) for child in (body.contents if body else soup.contents))
+                content = content_html.encode('utf-8')
                 return content, 200, {'Content-Type': 'text/html; charset=utf-8'}
                 
             mime_type = 'application/octet-stream'
